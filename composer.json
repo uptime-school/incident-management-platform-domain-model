@@ -1,0 +1,12 @@
+{
+    "name": "vladyslava/incident-management-platform-domain-model",
+    "type": "library",
+    "require": {
+        "php": ">=8.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Domain\\": "Domain/"
+        }
+    }
+}

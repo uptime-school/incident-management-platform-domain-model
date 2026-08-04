@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace Domain\Incident\Model;
+
 enum Severity: int
 {
     case Sev1 = 1;

@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace Domain\Subscription\Model;
+
 enum NotificationChannel: string
 {
     case Email = 'Email';
