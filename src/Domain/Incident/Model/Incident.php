@@ -36,10 +36,6 @@ class Incident extends AbstractModel
     #[ORM\Column(name: 'status', type: 'string', length: 20)]
     private string $statusValue;
 
-    /**
-     * @param Collection<int, IncidentParticipant> $participants
-     * @param Collection<int, TimelineEvent> $timelineEvents
-     */
     public function __construct(
         string $id,
         #[ORM\Column]
@@ -189,7 +185,6 @@ class Incident extends AbstractModel
         return $this->resolvedAt;
     }
 
-    /** @return Collection<int, IncidentParticipant> */
     public function getParticipants(): Collection
     {
         return $this->participants;
@@ -230,7 +225,6 @@ class Incident extends AbstractModel
         return $report;
     }
 
-    /** @return Collection<int, TimelineEvent> */
     public function getTimelineEvents(): Collection
     {
         return $this->timelineEvents;
