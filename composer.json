@@ -2,11 +2,32 @@
     "name": "vladyslava/incident-management-platform-domain-model",
     "type": "library",
     "require": {
-        "php": ">=8.4"
+        "php": ">=8.4",
+        "symfony/flex": "^2.11",
+        "symfony/framework-bundle": "^8.1",
+        "doctrine/orm": "^3.6",
+        "doctrine/doctrine-bundle": "^3.3",
+        "doctrine/doctrine-migrations-bundle": "^4.0",
+        "symfony/runtime": "^8.1",
+        "symfony/yaml": "^8.1",
+        "symfony/dotenv": "^8.1",
+        "symfony/uid": "^8.1"
     },
     "autoload": {
         "psr-4": {
-            "Domain\\": "Domain/"
+            "App\\": "src/"
+        }
+    },
+    "config": {
+        "allow-plugins": {
+            "symfony/flex": true,
+            "symfony/runtime": true
+        }
+    },
+    "scripts": {
+        "auto-scripts": {
+            "cache:clear": "symfony-cmd",
+            "assets:install %PUBLIC_DIR%": "symfony-cmd"
         }
     }
 }

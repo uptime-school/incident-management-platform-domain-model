@@ -1,0 +1,4 @@
+services:
+###> doctrine/doctrine-bundle ###
+  database:
+###< doctrine/doctrine-bundle ###
