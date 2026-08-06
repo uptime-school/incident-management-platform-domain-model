@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Incident\Model\Status;
 
+use App\Domain\Incident\Exception\InvalidStatusTransitionException;
+
 abstract class AbstractIncidentStatus implements IncidentStatus
 {
     public function investigate(): IncidentStatus
@@ -36,8 +38,8 @@ abstract class AbstractIncidentStatus implements IncidentStatus
         return static::MESSAGE;
     }
 
-    private function invalidTransition(string $action): \LogicException
+    private function invalidTransition(string $action): InvalidStatusTransitionException
     {
-        return new \LogicException(sprintf('Cannot "%s" an incident in state "%s".', $action, static::class));
+        return new InvalidStatusTransitionException($action, static::class);
     }
 }

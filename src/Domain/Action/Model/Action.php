@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Action\Model;
 
-use DateTime;
+use DateTimeImmutable;
 use App\Domain\Common\Model\AbstractModel;
 use App\Domain\Common\Model\Id;
 use Doctrine\ORM\Mapping as ORM;
@@ -17,7 +17,7 @@ class Action extends AbstractModel
         #[ORM\Column(type: 'text')]
         private readonly string $description,
         #[ORM\Column]
-        private readonly DateTime $deadline,
+        private readonly DateTimeImmutable $deadline,
         #[ORM\Column(enumType: ActionStatus::class)]
         private ActionStatus $status,
         #[ORM\Column(length: 36)]
@@ -33,7 +33,7 @@ class Action extends AbstractModel
         return $this->description;
     }
 
-    public function getDeadline(): DateTime
+    public function getDeadline(): DateTimeImmutable
     {
         return $this->deadline;
     }

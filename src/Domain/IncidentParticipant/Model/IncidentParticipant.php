@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\IncidentParticipant\Model;
 
-use DateTime;
+use DateTimeImmutable;
 use App\Domain\Incident\Model\Incident;
 use App\Domain\Common\Model\AbstractModel;
 use App\Domain\Common\Model\Id;
@@ -18,7 +18,7 @@ class IncidentParticipant extends AbstractModel
         #[ORM\Column(enumType: ParticipantRole::class)]
         private readonly ParticipantRole $role,
         #[ORM\Column]
-        private readonly DateTime $assignedAt,
+        private readonly DateTimeImmutable $assignedAt,
         #[ORM\Column(length: 36)]
         private readonly string $assignedById,
         #[ORM\Column(length: 36)]
@@ -35,7 +35,7 @@ class IncidentParticipant extends AbstractModel
         return $this->role;
     }
 
-    public function getAssignedAt(): DateTime
+    public function getAssignedAt(): DateTimeImmutable
     {
         return $this->assignedAt;
     }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\AuditRecord\Model;
 
-use DateTime;
+use DateTimeImmutable;
 use App\Domain\Common\Model\AbstractModel;
 use App\Domain\Common\Model\Id;
 use Doctrine\ORM\Mapping as ORM;
@@ -21,7 +21,7 @@ class AuditRecord extends AbstractModel
         #[ORM\Column(type: 'text')]
         private readonly string $newValue,
         #[ORM\Column]
-        private readonly DateTime $recordedAt,
+        private readonly DateTimeImmutable $recordedAt,
         #[ORM\Column(length: 36)]
         private readonly string $performedById,
         #[ORM\Column(length: 36)]
@@ -45,7 +45,7 @@ class AuditRecord extends AbstractModel
         return $this->newValue;
     }
 
-    public function getRecordedAt(): DateTime
+    public function getRecordedAt(): DateTimeImmutable
     {
         return $this->recordedAt;
     }

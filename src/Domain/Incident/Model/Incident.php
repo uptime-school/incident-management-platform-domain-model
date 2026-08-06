@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Incident\Model;
 
-use DateTime;
+use DateTimeImmutable;
 use App\Domain\Incident\Exception\IncidentNotResolvedOrClosedException;
 use App\Domain\Incident\Exception\MissingOwnerOrTeamException;
 use App\Domain\Incident\Exception\PostmortemReportAlreadyExistsException;
@@ -20,11 +20,8 @@ use App\Domain\IncidentParticipant\Model\ParticipantRole;
 use App\Domain\Common\Model\AbstractModel;
 use App\Domain\Common\Model\Id;
 use App\Domain\PostmortemReport\Model\PostmortemReport;
-use App\Domain\PostmortemReport\Model\ReportFile;
-use App\Domain\Team\Model\Team;
 use App\Domain\TimelineEvent\Model\TimelineEvent;
 use App\Domain\TimelineEvent\Model\TimelineEventType;
-use App\Domain\User\Model\User;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -46,9 +43,9 @@ class Incident extends AbstractModel
         #[ORM\Column(enumType: Severity::class)]
         private readonly Severity $severity,
         #[ORM\Column]
-        private readonly DateTime $declaredAt,
+        private readonly DateTimeImmutable $declaredAt,
         #[ORM\Column(nullable: true)]
-        private ?DateTime $resolvedAt = null,
+        private ?DateTimeImmutable $resolvedAt = null,
         #[ORM\OneToMany(targetEntity: IncidentParticipant::class, mappedBy: 'incident')]
         private readonly Collection $participants = new ArrayCollection(),
         #[ORM\OneToOne(targetEntity: PostmortemReport::class, mappedBy: 'incident')]
@@ -62,63 +59,63 @@ class Incident extends AbstractModel
         $this->syncStatusValue();
     }
 
-    public function investigate(?User $actor = null): void
+    public function investigate(?string $actorId = null): void
     {
         if ($this->hasTeam() || $this->hasOwner()) {
             $this->status = $this->status->investigate();
             $this->resolvedAt = null;
             $this->syncStatusValue();
-            $this->recordStatusChange($actor);
+            $this->recordStatusChange($actorId);
         } else {
             throw new MissingOwnerOrTeamException($this->getId());
         }
     }
 
-    public function mitigate(?User $actor = null): void
+    public function mitigate(?string $actorId = null): void
     {
         $this->status = $this->status->mitigate();
         $this->syncStatusValue();
-        $this->recordStatusChange($actor);
+        $this->recordStatusChange($actorId);
     }
 
-    public function resolve(?User $actor = null): void
+    public function resolve(?string $actorId = null): void
     {
         $this->status = $this->status->resolve();
-        $this->resolvedAt = new DateTime();
+        $this->resolvedAt = new DateTimeImmutable();
         $this->syncStatusValue();
-        $this->recordStatusChange($actor);
+        $this->recordStatusChange($actorId);
     }
 
-    public function close(?User $actor = null): void
+    public function close(?string $actorId = null): void
     {
         $this->status = $this->status->close();
         $this->syncStatusValue();
-        $this->recordStatusChange($actor);
+        $this->recordStatusChange($actorId);
     }
 
-    public function cancel(?User $actor = null): void
+    public function cancel(?string $actorId = null): void
     {
         $this->status = $this->status->cancel();
         $this->syncStatusValue();
-        $this->recordStatusChange($actor);
+        $this->recordStatusChange($actorId);
     }
 
-    private function recordStatusChange(?User $actor): void
+    private function recordStatusChange(?string $actorId): void
     {
         $this->addTimelineEvent(TimelineEvent::create(
             TimelineEventType::StatusChanged,
             $this->status->getTransitionMessage(),
-            new DateTime(),
-            $actor === null,
+            new DateTimeImmutable(),
+            $actorId === null,
             $this,
-            $actor
+            $actorId
         ));
     }
 
     public function hasOwner(): bool
     {
         foreach ($this->participants as $participant) {
-            if ($participant->getRole() === ParticipantRole::owner) {
+            if ($participant->getRole() === ParticipantRole::Owner) {
                 return true;
             }
         }
@@ -136,9 +133,9 @@ class Incident extends AbstractModel
         return $this->assignedTeamId;
     }
 
-    public function assignTeam(Team $team): void
+    public function assignTeam(string $teamId): void
     {
-        $this->assignedTeamId = $team->getId();
+        $this->assignedTeamId = $teamId;
     }
 
     public function addParticipant(IncidentParticipant $participant): void
@@ -175,12 +172,12 @@ class Incident extends AbstractModel
         return $this->severity;
     }
 
-    public function getDeclaredAt(): DateTime
+    public function getDeclaredAt(): DateTimeImmutable
     {
         return $this->declaredAt;
     }
 
-    public function getResolvedAt(): ?DateTime
+    public function getResolvedAt(): ?DateTimeImmutable
     {
         return $this->resolvedAt;
     }
@@ -213,12 +210,12 @@ class Incident extends AbstractModel
 
     public function createPostmortemReport(
         string $summary,
-        DateTime $generatedAt,
-        ReportFile $file
+        DateTimeImmutable $generatedAt,
+        string $fileId
     ): PostmortemReport {
         $this->assertCanHavePostmortemReport();
 
-        $report = PostmortemReport::create($summary, $generatedAt, $file, $this);
+        $report = PostmortemReport::create($summary, $generatedAt, $fileId, $this);
 
         $this->setPostmortemReport($report);
 

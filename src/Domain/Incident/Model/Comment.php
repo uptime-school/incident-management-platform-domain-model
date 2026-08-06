@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Incident\Model;
 
-use DateTime;
+use DateTimeImmutable;
 use App\Domain\Common\Model\AbstractModel;
 use App\Domain\Common\Model\Id;
 use Doctrine\ORM\Mapping as ORM;
@@ -17,7 +17,7 @@ class Comment extends AbstractModel
         #[ORM\Column(type: 'text')]
         private readonly string $text,
         #[ORM\Column]
-        private readonly DateTime $writtenAt,
+        private readonly DateTimeImmutable $writtenAt,
         #[ORM\Column(length: 36)]
         private readonly string $incidentId,
         #[ORM\Column(length: 36)]
@@ -31,7 +31,7 @@ class Comment extends AbstractModel
         return $this->text;
     }
 
-    public function getWrittenAt(): DateTime
+    public function getWrittenAt(): DateTimeImmutable
     {
         return $this->writtenAt;
     }

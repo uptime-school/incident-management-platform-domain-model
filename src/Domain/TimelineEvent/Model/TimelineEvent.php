@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace App\Domain\TimelineEvent\Model;
 
-use DateTime;
+use DateTimeImmutable;
 use App\Domain\Incident\Model\Incident;
 use App\Domain\Common\Model\AbstractModel;
 use App\Domain\Common\Model\Id;
-use App\Domain\User\Model\User;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Uid\Uuid;
 
@@ -22,7 +21,7 @@ class TimelineEvent extends AbstractModel
         #[ORM\Column(type: 'text')]
         private readonly string $message,
         #[ORM\Column]
-        private readonly DateTime $occurredAt,
+        private readonly DateTimeImmutable $occurredAt,
         #[ORM\Column]
         private readonly bool $raisedBySystem,
         #[ORM\ManyToOne(targetEntity: Incident::class, inversedBy: 'timelineEvents')]
@@ -37,10 +36,10 @@ class TimelineEvent extends AbstractModel
     public static function create(
         TimelineEventType $type,
         string $message,
-        DateTime $occurredAt,
+        DateTimeImmutable $occurredAt,
         bool $raisedBySystem,
         Incident $incident,
-        ?User $author = null
+        ?string $authorId = null
     ): self {
         return new self(
             Uuid::v4()->toRfc4122(),
@@ -49,7 +48,7 @@ class TimelineEvent extends AbstractModel
             $occurredAt,
             $raisedBySystem,
             $incident,
-            $author?->getId()
+            $authorId
         );
     }
 
@@ -63,7 +62,7 @@ class TimelineEvent extends AbstractModel
         return $this->message;
     }
 
-    public function getOccurredAt(): DateTime
+    public function getOccurredAt(): DateTimeImmutable
     {
         return $this->occurredAt;
     }

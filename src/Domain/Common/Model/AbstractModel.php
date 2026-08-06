@@ -14,15 +14,12 @@ abstract class AbstractModel
     #[ORM\Column(name: 'id', type: 'string', length: 36)]
     private readonly string $idValue;
 
-    protected Id $id;
-
-    public function __construct(Id $id)
+    public function __construct(protected Id $id)
     {
-        $this->id = $id;
         $this->idValue = $id->getValue();
     }
 
-    public function getId(): ?string
+    public function getId(): string
     {
         return $this->id->getValue();
     }

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\PostmortemReport\Model;
 
-use DateTime;
+use DateTimeImmutable;
 use App\Domain\Incident\Model\Incident;
 use App\Domain\Common\Model\AbstractModel;
 use App\Domain\Common\Model\Id;
@@ -19,7 +19,7 @@ class PostmortemReport extends AbstractModel
         #[ORM\Column(type: 'text')]
         private readonly string $summary,
         #[ORM\Column]
-        private readonly DateTime $generatedAt,
+        private readonly DateTimeImmutable $generatedAt,
         #[ORM\Column(length: 36)]
         private readonly string $fileId,
         #[ORM\OneToOne(targetEntity: Incident::class, inversedBy: 'postmortemReport')]
@@ -31,15 +31,15 @@ class PostmortemReport extends AbstractModel
 
     public static function create(
         string $summary,
-        DateTime $generatedAt,
-        ReportFile $file,
+        DateTimeImmutable $generatedAt,
+        string $fileId,
         Incident $incident
     ): self {
         return new self(
             Uuid::v4()->toRfc4122(),
             $summary,
             $generatedAt,
-            $file->getId(),
+            $fileId,
             $incident
         );
     }
@@ -49,7 +49,7 @@ class PostmortemReport extends AbstractModel
         return $this->summary;
     }
 
-    public function getGeneratedAt(): DateTime
+    public function getGeneratedAt(): DateTimeImmutable
     {
         return $this->generatedAt;
     }

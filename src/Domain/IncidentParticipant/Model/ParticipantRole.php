@@ -6,6 +6,6 @@ namespace App\Domain\IncidentParticipant\Model;
 
 enum ParticipantRole : string
 {
-    case owner = 'Owner';
-    case responder = 'Responder';
+    case Owner = 'Owner';
+    case Responder = 'Responder';
 }
