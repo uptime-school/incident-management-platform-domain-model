@@ -1,0 +1,19 @@
+using IncidentManagement.Domain.Common;
+using IncidentManagement.Domain.ValueObjects;
+
+namespace IncidentManagement.Domain.Entities;
+
+public sealed class User : Entity
+{
+    public string FullName { get; }
+    public EmailAddress Email { get; }
+
+    public User(Guid id, string fullName, EmailAddress email) : base(id)
+    {
+        if (string.IsNullOrWhiteSpace(fullName))
+            throw new ArgumentException("Full name cannot be empty.", nameof(fullName));
+
+        FullName = fullName;
+        Email = email ?? throw new ArgumentNullException(nameof(email));
+    }
+}
