@@ -1,0 +1,420 @@
+openapi: 3.0.3
+
+info:
+  title: Incident Management Platform API
+  version: 1.1.0
+  license:
+    name: Proprietary
+  description: |
+    API contract for incident follow-up action items.
+
+    An action item can be created only after the incident has a postmortem.
+    Creation and status changes are appended to the incident's existing audit
+    history. The server sets the initial status to `TO_DO`.
+
+servers:
+  - url: /api
+    description: Application API
+
+tags:
+  - name: Action Items
+    description: Follow-up work identified after an incident postmortem
+
+security:
+  - bearerAuth: []
+
+paths:
+  /incidents/{incidentId}/action-items:
+    parameters:
+      - $ref: '#/components/parameters/IncidentId'
+
+    post:
+      tags: [Action Items]
+      summary: Create an action item for an incident
+      description: |
+        Creates an action item with initial status `TO_DO`.
+
+        The caller must be an incident manager and the incident must already
+        have a postmortem. A successful creation appends an
+        `ACTION_ITEM_CREATED` event to the incident's existing audit history.
+      operationId: createActionItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateActionItemRequest'
+      responses:
+        '201':
+          description: Action item created
+          headers:
+            Location:
+              description: URI of the created action item
+              schema:
+                type: string
+              example: /action-items/42
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Incident or assignee does not exist
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                incidentNotFound:
+                  value:
+                    type: https://example.com/problems/resource-not-found
+                    title: Resource not found
+                    status: 404
+                    detail: Incident 17 does not exist.
+                    code: INCIDENT_NOT_FOUND
+                assigneeNotFound:
+                  value:
+                    type: https://example.com/problems/resource-not-found
+                    title: Resource not found
+                    status: 404
+                    detail: User 25 does not exist.
+                    code: ASSIGNEE_NOT_FOUND
+        '409':
+          description: Incident exists but does not have a postmortem
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://example.com/problems/postmortem-required
+                title: Postmortem required
+                status: 409
+                detail: Action items can be created only after the incident has a postmortem.
+                code: POSTMORTEM_REQUIRED
+
+    get:
+      tags: [Action Items]
+      summary: List action items for an incident
+      operationId: listIncidentActionItems
+      parameters:
+        - $ref: '#/components/parameters/StatusFilter'
+      responses:
+        '200':
+          description: Action items belonging to the incident
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActionItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /users/me/action-items:
+    get:
+      tags: [Action Items]
+      summary: List action items assigned to the current responder
+      description: Returns the caller's assigned action items across all incidents.
+      operationId: listMyActionItems
+      parameters:
+        - $ref: '#/components/parameters/StatusFilter'
+        - name: dueBefore
+          in: query
+          description: Return items due on or before this date.
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Action items assigned to the current responder
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActionItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /action-items/{actionItemId}:
+    parameters:
+      - $ref: '#/components/parameters/ActionItemId'
+
+    get:
+      tags: [Action Items]
+      summary: Get one action item
+      operationId: getActionItem
+      responses:
+        '200':
+          description: Action item details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /action-items/{actionItemId}/status:
+    parameters:
+      - $ref: '#/components/parameters/ActionItemId'
+
+    patch:
+      tags: [Action Items]
+      summary: Change an action item's status
+      description: |
+        Only the action item's assignee can change its status. A successful
+        change appends an `ACTION_ITEM_STATUS_CHANGED` event to the incident's
+        existing audit history. Sending the current status again is idempotent
+        and does not append another audit event.
+      operationId: updateActionItemStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateActionItemStatusRequest'
+      responses:
+        '200':
+          description: Status updated, or the requested status was already current
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionItem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The caller is not the action item's assignee
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: https://example.com/problems/action-item-assignee-required
+                title: Action item assignee required
+                status: 403
+                detail: Only the assigned responder may change this action item's status.
+                code: NOT_ACTION_ITEM_ASSIGNEE
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IncidentId:
+      name: incidentId
+      in: path
+      required: true
+      description: Incident identifier
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+    ActionItemId:
+      name: actionItemId
+      in: path
+      required: true
+      description: Action item identifier
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+
+    StatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Optionally return only action items with this status.
+      schema:
+        $ref: '#/components/schemas/ActionItemStatus'
+
+  schemas:
+    ActionItemStatus:
+      type: string
+      description: |
+        Fixed action item status set:
+        * `TO_DO` — To Do
+        * `IN_PROGRESS` — In Progress
+        * `DONE` — Done
+      enum: [TO_DO, IN_PROGRESS, DONE]
+      example: IN_PROGRESS
+
+    CreateActionItemRequest:
+      type: object
+      additionalProperties: false
+      required: [text, assigneeId, dueDate]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Short description of the follow-up work.
+          example: Add database failover steps to the runbook
+        assigneeId:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Identifier of the one user assigned to this item.
+          example: 25
+        dueDate:
+          type: string
+          format: date
+          example: '2026-08-31'
+
+    UpdateActionItemStatusRequest:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/ActionItemStatus'
+
+    ActionItem:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - incidentId
+        - text
+        - assignee
+        - dueDate
+        - status
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 42
+        incidentId:
+          type: integer
+          format: int64
+          example: 17
+        text:
+          type: string
+          maxLength: 200
+          example: Add database failover steps to the runbook
+        assignee:
+          $ref: '#/components/schemas/UserSummary'
+        dueDate:
+          type: string
+          format: date
+          example: '2026-08-31'
+        status:
+          $ref: '#/components/schemas/ActionItemStatus'
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-08-09T11:30:00Z'
+        updatedAt:
+          type: string
+          format: date-time
+          example: '2026-08-10T09:15:00Z'
+
+    UserSummary:
+      type: object
+      additionalProperties: false
+      required: [id, displayName]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 25
+        displayName:
+          type: string
+          example: Alex Responder
+
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, detail, code]
+      properties:
+        type:
+          type: string
+          format: uri
+          example: https://example.com/problems/validation-error
+        title:
+          type: string
+          example: Request validation failed
+        status:
+          type: integer
+          format: int32
+          example: 400
+        detail:
+          type: string
+          example: The request contains invalid values.
+        instance:
+          type: string
+          example: /action-items/42/status
+        code:
+          type: string
+          description: Stable, machine-readable application error code.
+          example: INVALID_ACTION_ITEM_STATUS
+        errors:
+          type: array
+          description: Optional field-level validation errors.
+          items:
+            $ref: '#/components/schemas/FieldError'
+
+    FieldError:
+      type: object
+      additionalProperties: false
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          example: status
+        message:
+          type: string
+          example: must be one of TO_DO, IN_PROGRESS, DONE
+
+  responses:
+    BadRequest:
+      description: Request syntax or validation is invalid
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+    Unauthorized:
+      description: Authentication is required or the access token is invalid
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+    Forbidden:
+      description: The authenticated user is not allowed to perform this operation
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+
+    NotFound:
+      description: The requested resource does not exist
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
