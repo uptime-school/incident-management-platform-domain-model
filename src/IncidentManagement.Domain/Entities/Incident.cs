@@ -12,6 +12,8 @@ public sealed class Incident : Entity
     private readonly List<Comment> _comments = new();
     private readonly List<Subscription> _subscriptions = new();
     private readonly List<ActionItem> _actionItems = new();
+    private readonly List<Notification> _notifications = new();
+    private readonly HashSet<Guid> _affectedServiceIds = new();
 
     public string Title { get; private set; }
     public string Description { get; private set; }
@@ -27,6 +29,8 @@ public sealed class Incident : Entity
     public IReadOnlyCollection<Comment> Comments => _comments.AsReadOnly();
     public IReadOnlyCollection<Subscription> Subscriptions => _subscriptions.AsReadOnly();
     public IReadOnlyCollection<ActionItem> ActionItems => _actionItems.AsReadOnly();
+    public IReadOnlyCollection<Notification> Notifications => _notifications.AsReadOnly();
+    public IReadOnlyCollection<Guid> AffectedServiceIds => _affectedServiceIds;
 
     public IncidentParticipant? Owner => _participants.FirstOrDefault(p => p.Role == ParticipantRole.Owner);
     public bool HasOwner => Owner is not null;
@@ -56,6 +60,10 @@ public sealed class Incident : Entity
     {
         TeamId = teamId;
     }
+
+    public void AddAffectedService(Guid serviceId) => _affectedServiceIds.Add(serviceId);
+
+    public void RemoveAffectedService(Guid serviceId) => _affectedServiceIds.Remove(serviceId);
 
     public void ChangeSeverity(Severity newSeverity, DateTimeOffset occurredAt, bool raisedBySystem = false)
     {
@@ -170,6 +178,21 @@ public sealed class Incident : Entity
 
         actionItem.ChangeStatus(newStatus);
         AppendTimelineEvent(TimelineEventType.ActionItemStatusChanged, $"Action item status changed to {newStatus}.", occurredAt, raisedBySystem);
+    }
+
+    public Notification SendNotification(
+        Guid id,
+        Guid commentId,
+        Guid recipientUserId,
+        NotificationChannel channel,
+        DateTimeOffset sentAt)
+    {
+        if (_comments.All(c => c.Id != commentId))
+            throw new DomainException("Notification must reference a comment that belongs to this incident.");
+
+        var notification = new Notification(id, Id, commentId, recipientUserId, channel, sentAt);
+        _notifications.Add(notification);
+        return notification;
     }
 
     private ActionItem FindActionItem(Guid actionItemId)
