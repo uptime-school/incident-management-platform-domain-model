@@ -1,0 +1,1247 @@
+openapi: 3.0.3
+
+info:
+  title: Incident Management Platform API
+  version: 1.0.0
+  description: >
+    REST API for managing technical incidents, timelines, assignments, subscriptions,
+    postmortem reports, action items, users, and audit history.
+
+  contact:
+    name: Incident Management Platform Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.example.com/v1
+    description: Production API v1
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Incidents
+    description: Incident lifecycle (FR-01–FR-07, FR-12)
+  - name: Timeline & Comments
+    description: Timeline and operational updates (FR-08, FR-09)
+  - name: Acknowledgements
+    description: Assignment acknowledgement (FR-19)
+  - name: Subscriptions
+    description: Follow incidents and receive notifications (FR-10, FR-11)
+  - name: Reports
+    description: Postmortem report generation and download (FR-13, FR-14)
+  - name: Action Items
+    description: Postmortem follow-up tasks (FR-21, FR-22)
+  - name: Users & Access
+    description: User, role and permission management (FR-15, FR-16)
+  - name: Audit
+    description: Read-only audit history (FR-17, FR-18, FR-20)
+
+paths:
+
+  ################################################################
+  # INCIDENTS
+  ################################################################
+  /incidents:
+    get:
+      tags: [Incidents]
+      operationId: listIncidents
+      summary: List, search, sort and filter incidents
+      description: >
+        Returns a paginated list of incidents visible to the caller.
+        **Roles:** Viewer, Responder, Incident Manager, Admin. (FR-02, FR-04)
+      parameters:
+        - $ref: '#/components/parameters/FilterStatus'
+        - $ref: '#/components/parameters/FilterSeverity'
+        - $ref: '#/components/parameters/FilterOwnerId'
+        - $ref: '#/components/parameters/FilterAffectedService'
+        - $ref: '#/components/parameters/FilterFromDate'
+        - $ref: '#/components/parameters/FilterToDate'
+        - $ref: '#/components/parameters/QueryText'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Paginated incident list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentPage'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+    post:
+      tags: [Incidents]
+      operationId: createIncident
+      summary: Create a new incident
+      description: >
+        Creates a new incident record. **Role:** Incident Manager. (FR-01)
+
+
+        Send an `Idempotency-Key` so a retried request after a network timeout returns the
+        original result instead of creating a duplicate incident. Side effects: `IncidentCreated`
+        timeline event + audit record.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IncidentCreate'
+      responses:
+        '201':
+          description: Incident created.
+          headers:
+            Location:
+              description: URL of the created incident.
+              schema: { type: string, format: uri }
+            ETag:
+              description: Version token for optimistic concurrency.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /incidents/{incidentId}:
+    parameters:
+      - $ref: '#/components/parameters/IncidentId'
+    get:
+      tags: [Incidents]
+      operationId: getIncident
+      summary: Get incident details
+      description: >
+        Returns full incident details including the embedded timeline.
+        **Roles:** Viewer, Responder, Incident Manager, Admin. (FR-03, FR-09)
+
+
+        The response carries an `ETag`; supply it as `If-Match` on subsequent updates.
+      responses:
+        '200':
+          description: Incident details.
+          headers:
+            ETag:
+              description: Current version token; use as `If-Match` when updating.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IncidentDetail'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+    patch:
+      tags: [Incidents]
+      operationId: updateIncident
+      summary: Update incident (status, severity, owner, resolve)
+      description: >
+        Partially updates an incident: status, severity, owner/team, or resolution.
+        **Role:** Incident Manager. (FR-05, FR-06, FR-07, FR-12, FR-20)
+
+
+        Optimistic concurrency is enforced: `If-Match` is **required**. A stale token yields
+        `412`; a missing token yields `428`. Side effects: timeline event, audit record,
+        notifications to subscribers.
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/IncidentPatch'
+      responses:
+        '200':
+          description: Incident updated.
+          headers:
+            ETag:
+              description: New version token after the update.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Incident'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+
+  ################################################################
+  # TIMELINE & COMMENTS
+  ################################################################
+  /incidents/{incidentId}/timeline:
+    parameters:
+      - $ref: '#/components/parameters/IncidentId'
+    get:
+      tags: [Timeline & Comments]
+      operationId: getIncidentTimeline
+      summary: Get the incident timeline
+      description: >
+        Returns comments, status/severity/ownership changes, action item activity, and system
+        events in order. **Roles:** Viewer, Responder, Incident Manager, Admin. (FR-09, FR-20)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Timeline events.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimelineEventPage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /incidents/{incidentId}/comments:
+    parameters:
+      - $ref: '#/components/parameters/IncidentId'
+    get:
+      tags: [Timeline & Comments]
+      operationId: listComments
+      summary: List comments on an incident
+      description: >
+        Returns comments only (a subset of the timeline).
+        **Roles:** Viewer, Responder, Incident Manager, Admin. (FR-09)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Comments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommentPage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Timeline & Comments]
+      operationId: addComment
+      summary: Add a comment / timeline update
+      description: >
+        Adds an operational comment. **Roles:** Responder, Incident Manager. (FR-08)
+        Creates a timeline event and audit record.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CommentCreate'
+      responses:
+        '201':
+          description: Comment created.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Comment'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  ################################################################
+  # ACKNOWLEDGEMENTS
+  ################################################################
+  /incidents/{incidentId}/acknowledgements:
+    parameters:
+      - $ref: '#/components/parameters/IncidentId'
+    post:
+      tags: [Acknowledgements]
+      operationId: acknowledgeAssignment
+      summary: Acknowledge assignment
+      description: >
+        The caller acknowledges they are working on / responsible for the incident.
+        **Roles:** Responder, Incident Manager. (FR-19)
+
+
+        The acknowledging user is taken from the bearer token, never from the request body.
+      responses:
+        '201':
+          description: Acknowledgement recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Acknowledgement'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Already acknowledged by this user.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
+
+  ################################################################
+  # SUBSCRIPTIONS
+  ################################################################
+  /incidents/{incidentId}/subscriptions:
+    parameters:
+      - $ref: '#/components/parameters/IncidentId'
+    get:
+      tags: [Subscriptions]
+      operationId: listSubscriptions
+      summary: List subscriptions for an incident
+      description: >
+        Returns the subscribers of an incident.
+        **Roles:** Incident Manager, Admin (own subscription visible to any subscriber). (FR-10)
+      responses:
+        '200':
+          description: Subscriptions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Subscription' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Subscriptions]
+      operationId: subscribe
+      summary: Subscribe to incident updates
+      description: >
+        Subscribes the caller (or, for managers, a named user) to incident updates.
+        **Roles:** Viewer, Responder, Incident Manager. (FR-10, FR-11)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionCreate'
+      responses:
+        '201':
+          description: Subscription created.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subscription'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Already subscribed.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
+
+  /incidents/{incidentId}/subscriptions/{subscriptionId}:
+    parameters:
+      - $ref: '#/components/parameters/IncidentId'
+      - $ref: '#/components/parameters/SubscriptionId'
+    delete:
+      tags: [Subscriptions]
+      operationId: unsubscribe
+      summary: Unsubscribe from incident updates
+      description: >
+        Removes a subscription. A user may remove their own subscription;
+        managers/admins may remove others. (FR-10)
+      responses:
+        '204':
+          description: Unsubscribed.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  ################################################################
+  # REPORTS (async)
+  ################################################################
+  /incidents/{incidentId}/reports:
+    parameters:
+      - $ref: '#/components/parameters/IncidentId'
+    post:
+      tags: [Reports]
+      operationId: generateReport
+      summary: Generate a postmortem report (async)
+      description: >
+        Starts generation of a postmortem report for a resolved incident.
+        **Role:** Incident Manager. (FR-13)
+
+
+        Long-running: returns `202 Accepted` with a `Location` pointing at the report
+        status resource. Poll it until `status = completed`, then download via `downloadUrl`.
+      responses:
+        '202':
+          description: Report generation accepted.
+          headers:
+            Location:
+              description: URL of the report status resource.
+              schema: { type: string, format: uri }
+            Retry-After:
+              description: Suggested polling interval, in seconds.
+              schema: { type: integer }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Incident is not resolved yet.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
+
+  /reports/{reportId}:
+    parameters:
+      - $ref: '#/components/parameters/ReportId'
+    get:
+      tags: [Reports]
+      operationId: getReport
+      summary: Get report status (and download link when ready)
+      description: >
+        Returns the report job status. When `status = completed`, `downloadUrl` holds a
+        short-lived pre-signed link to the PDF. **Role:** Incident Manager. (FR-13, FR-14)
+      responses:
+        '200':
+          description: Report status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  ################################################################
+  # ACTION ITEMS
+  ################################################################
+  /incidents/{incidentId}/action-items:
+    parameters:
+      - $ref: '#/components/parameters/IncidentId'
+    get:
+      tags: [Action Items]
+      operationId: listIncidentActionItems
+      summary: List action items for an incident
+      description: >
+        Returns the postmortem follow-up tasks for this incident.
+        **Roles:** Viewer, Responder, Incident Manager, Admin. (FR-22)
+      parameters:
+        - $ref: '#/components/parameters/FilterAssigneeId'
+        - $ref: '#/components/parameters/FilterActionItemStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Action items.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionItemPage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Action Items]
+      operationId: createActionItem
+      summary: Create a postmortem action item
+      description: >
+        Creates a follow-up task on an incident, to be done exactly once by exactly one
+        assignee. **Role:** Incident Manager. (FR-21)
+
+
+        The incident must already have a postmortem report; an incident that never reached
+        that point cannot carry action items — see `409` below. New items always start in
+        `to_do`. Side effects: `action_item_created` timeline event + audit record.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionItemCreate'
+      responses:
+        '201':
+          description: Action item created.
+          headers:
+            Location:
+              description: URL of the created action item.
+              schema: { type: string, format: uri }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionItem'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Incident has no postmortem report yet.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /incidents/{incidentId}/action-items/{actionItemId}:
+    parameters:
+      - $ref: '#/components/parameters/IncidentId'
+      - $ref: '#/components/parameters/ActionItemId'
+    get:
+      tags: [Action Items]
+      operationId: getActionItem
+      summary: Get an action item
+      description: >
+        **Roles:** Viewer, Responder, Incident Manager, Admin. (FR-22)
+      responses:
+        '200':
+          description: Action item.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionItem'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Action Items]
+      operationId: updateActionItem
+      summary: Update an action item (status, assignee, due date)
+      description: >
+        Partially updates an action item. **Role:** Incident Manager may change any field
+        (`status`, `assigneeId`, `dueAt`) on any action item belonging to the incident.
+        **Role:** Responder may change only `status`, and only on an action item where they
+        are the current `assigneeId`; changing another field, or an item not assigned to them,
+        returns `403`. (FR-22)
+
+
+        No `If-Match` is required — each field is an independent, low-contention transition
+        and the audit trail preserves full history regardless of ordering. Side effects: an
+        `action_item_status_changed` and/or `action_item_reassigned` timeline event, plus an
+        audit record, for each field actually changed.
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/ActionItemPatch'
+      responses:
+        '200':
+          description: Action item updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionItem'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /action-items:
+    get:
+      tags: [Action Items]
+      operationId: searchActionItems
+      summary: Search action items across incidents
+      description: >
+        Cross-incident search — this is a read-only view, not a second canonical URL for
+        action items; every item's canonical location is still
+        `/incidents/{incidentId}/action-items/{actionItemId}`, returned as `id`/`incidentId`
+        on each result. **Roles:** Responder, Incident Manager, Admin. (FR-22)
+
+
+        Responders see only their own queue: `assigneeId` is forced to the caller's id and any
+        value supplied in the request is ignored. Incident Managers and Admins may filter by
+        `assigneeId`, `incidentId`, `status`, or omit filters to see everything.
+      parameters:
+        - $ref: '#/components/parameters/FilterAssigneeId'
+        - $ref: '#/components/parameters/FilterIncidentId'
+        - $ref: '#/components/parameters/FilterActionItemStatus'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Action items.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionItemPage'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  ################################################################
+  # USERS & ACCESS
+  ################################################################
+  /users:
+    get:
+      tags: [Users & Access]
+      operationId: listUsers
+      summary: List users
+      description: '**Role:** Admin. (FR-16)'
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: role
+          in: query
+          schema: { $ref: '#/components/schemas/Role' }
+      responses:
+        '200':
+          description: Users.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [Users & Access]
+      operationId: createUser
+      summary: Create a user
+      description: '**Role:** Admin. (FR-16)'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+      responses:
+        '201':
+          description: User created.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      tags: [Users & Access]
+      operationId: getUser
+      summary: Get a user
+      description: '**Role:** Admin. (FR-16)'
+      responses:
+        '200':
+          description: User.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Users & Access]
+      operationId: updateUser
+      summary: Update a user's roles / status
+      description: >
+        Manage a user's roles, permissions and active status.
+        **Role:** Admin. (FR-15, FR-16). Recorded in audit history.
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: '#/components/schemas/UserPatch'
+      responses:
+        '200':
+          description: User updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      tags: [Users & Access]
+      operationId: deactivateUser
+      summary: Deactivate a user
+      description: '**Role:** Admin. Soft-deactivates the user. (FR-16)'
+      responses:
+        '204':
+          description: User deactivated.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  ################################################################
+  # AUDIT (read-only)
+  ################################################################
+  /audit:
+    get:
+      tags: [Audit]
+      operationId: listAuditRecords
+      summary: View audit history
+      description: >
+        Read-only audit history across incidents and permission changes. Audit records are
+        written by the system (FR-17, FR-20) and are never client-created. Access is restricted;
+        unauthorized callers receive `404` rather than `403` to avoid disclosing existence.
+        **Role:** Admin. (FR-18)
+      parameters:
+        - name: entityType
+          in: query
+          schema: { type: string, example: Incident }
+        - name: entityId
+          in: query
+          schema: { type: string }
+        - name: actorId
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/FilterFromDate'
+        - $ref: '#/components/parameters/FilterToDate'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Audit records.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecordPage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /incidents/{incidentId}/audit:
+    parameters:
+      - $ref: '#/components/parameters/IncidentId'
+    get:
+      tags: [Audit]
+      operationId: listIncidentAuditRecords
+      summary: View audit history for one incident
+      description: >
+        Audit trail scoped to a single incident.
+        **Roles:** Admin; Incident Manager for review. (FR-17, FR-18)
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: Audit records for the incident.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditRecordPage'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+################################################################
+# COMPONENTS
+################################################################
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        OAuth2/OIDC-issued JWT. The token identifies the actor (used for `ownerId`/`actorId`)
+        and carries the roles enforced for RBAC (FR-15).
+
+  ############################ PARAMETERS ############################
+  parameters:
+    IncidentId:
+      name: incidentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SubscriptionId:
+      name: subscriptionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ReportId:
+      name: reportId
+      in: path
+      required: true
+      schema: { type: string }
+    ActionItemId:
+      name: actionItemId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: >
+        Client-generated key identifying one logical create operation. Reuse the same key across
+        retries so a duplicate is not created; a different body with the same key returns `422`.
+      schema: { type: string, format: uuid }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: The `ETag` returned by the last read; the update applies only if it still matches.
+      schema: { type: string }
+
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Sort:
+      name: sort
+      in: query
+      description: 'Sort expression, e.g. `-createdAt` (desc) or `severity`.'
+      schema: { type: string, example: '-createdAt' }
+    QueryText:
+      name: q
+      in: query
+      description: Free-text keyword search across title and description.
+      schema: { type: string }
+    FilterStatus:
+      name: status
+      in: query
+      schema: { $ref: '#/components/schemas/IncidentStatus' }
+    FilterSeverity:
+      name: severity
+      in: query
+      schema: { $ref: '#/components/schemas/Severity' }
+    FilterOwnerId:
+      name: ownerId
+      in: query
+      schema: { type: string, format: uuid }
+    FilterAffectedService:
+      name: affectedService
+      in: query
+      schema: { type: string }
+    FilterFromDate:
+      name: fromDate
+      in: query
+      schema: { type: string, format: date-time }
+    FilterToDate:
+      name: toDate
+      in: query
+      schema: { type: string, format: date-time }
+    FilterAssigneeId:
+      name: assigneeId
+      in: query
+      description: Filters action items by assignee.
+      schema: { type: string, format: uuid }
+    FilterIncidentId:
+      name: incidentId
+      in: query
+      description: Filters action items by incident (only meaningful on the cross-incident search).
+      schema: { type: string, format: uuid }
+    FilterActionItemStatus:
+      name: status
+      in: query
+      schema: { $ref: '#/components/schemas/ActionItemStatus' }
+
+  ############################ RESPONSES ############################
+  responses:
+    BadRequest:
+      description: Malformed request (syntax).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    Unauthorized:
+      description: Missing or invalid authentication.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    Forbidden:
+      description: Authenticated but the role lacks permission (FR-15).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    NotFound:
+      description: Resource not found (or hidden from an unauthorized caller).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    IdempotencyConflict:
+      description: The `Idempotency-Key` was reused with a different request body.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    PreconditionFailed:
+      description: '`If-Match` did not match the current version — the resource changed (lost-update prevented).'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    PreconditionRequired:
+      description: '`If-Match` header is required for this update but was not supplied.'
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    ValidationError:
+      description: The request was well-formed but failed business validation (semantics).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/ValidationProblemDetails' }
+
+  ############################ SCHEMAS ############################
+  schemas:
+
+    Severity:
+      type: string
+      enum: [SEV1, SEV2, SEV3, SEV4]
+    IncidentStatus:
+      type: string
+      enum: [open, investigating, monitoring, resolved]
+    Role:
+      type: string
+      enum: [viewer, responder, incident_manager, admin]
+    AuditAction:
+      type: string
+      enum:
+        - created
+        - status_changed
+        - severity_changed
+        - owner_changed
+        - resolved
+        - report_generated
+        - permission_changed
+        - action_item_created
+        - action_item_reassigned
+        - action_item_status_changed
+    TimelineEventType:
+      type: string
+      enum:
+        - comment
+        - status_change
+        - severity_change
+        - ownership_change
+        - resolution
+        - system_event
+        - action_item_created
+        - action_item_reassigned
+        - action_item_status_changed
+    ActionItemStatus:
+      type: string
+      enum: [to_do, in_progress, done]
+
+    Incident:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: '#/components/schemas/IncidentStatus' }
+        severity: { $ref: '#/components/schemas/Severity' }
+        affectedService: { type: string }
+        ownerId: { type: string, format: uuid, nullable: true }
+        responsibleTeamMemberIds:
+          type: array
+          items: { type: string, format: uuid }
+        resolutionSummary: { type: string, nullable: true }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version:
+          type: string
+          description: Concurrency token; mirrors the `ETag` header.
+      required: [id, title, status, severity, affectedService, createdAt, updatedAt]
+
+    IncidentSummary:
+      type: object
+      description: Lightweight incident for list views.
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        status: { $ref: '#/components/schemas/IncidentStatus' }
+        severity: { $ref: '#/components/schemas/Severity' }
+        affectedService: { type: string }
+        ownerId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, title, status, severity, createdAt]
+
+    IncidentDetail:
+      allOf:
+        - $ref: '#/components/schemas/Incident'
+        - type: object
+          properties:
+            timeline:
+              type: array
+              items: { $ref: '#/components/schemas/TimelineEvent' }
+
+    IncidentCreate:
+      type: object
+      required: [title, description, severity, affectedService]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string }
+        severity: { $ref: '#/components/schemas/Severity' }
+        affectedService: { type: string }
+        ownerId: { type: string, format: uuid }
+        responsibleTeamMemberIds:
+          type: array
+          items: { type: string, format: uuid }
+
+    IncidentPatch:
+      type: object
+      description: Merge-patch; include only fields to change.
+      properties:
+        status: { $ref: '#/components/schemas/IncidentStatus' }
+        severity: { $ref: '#/components/schemas/Severity' }
+        ownerId: { type: string, format: uuid, nullable: true }
+        responsibleTeamMemberIds:
+          type: array
+          items: { type: string, format: uuid }
+        resolutionSummary: { type: string }
+
+    TimelineEvent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: '#/components/schemas/TimelineEventType' }
+        message: { type: string, nullable: true }
+        actorId: { type: string, format: uuid, nullable: true }
+        previousValue: { type: string, nullable: true }
+        newValue: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+      required: [id, type, createdAt]
+
+    TimelineEventPage:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/TimelineEvent' }
+
+    Comment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        incidentId: { type: string, format: uuid }
+        authorId: { type: string, format: uuid }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+      required: [id, incidentId, authorId, body, createdAt]
+
+    CommentCreate:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1 }
+
+    CommentPage:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/Comment' }
+
+    Acknowledgement:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        incidentId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        acknowledgedAt: { type: string, format: date-time }
+      required: [id, incidentId, userId, acknowledgedAt]
+
+    Subscription:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        incidentId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+      required: [id, incidentId, userId, createdAt]
+
+    SubscriptionCreate:
+      type: object
+      description: Omit `userId` to subscribe yourself; managers may name another user.
+      properties:
+        userId: { type: string, format: uuid }
+
+    Report:
+      type: object
+      properties:
+        reportId: { type: string }
+        incidentId: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [processing, completed, failed]
+        downloadUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Present only when `status = completed`; short-lived pre-signed URL (FR-14).
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+      required: [reportId, incidentId, status, createdAt]
+
+    ActionItem:
+      type: object
+      description: A postmortem follow-up task, addressable only under its owning incident.
+      properties:
+        id: { type: string, format: uuid }
+        incidentId: { type: string, format: uuid }
+        description: { type: string }
+        assigneeId:
+          type: string
+          format: uuid
+          description: Exactly one assignee at all times.
+        dueAt: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/ActionItemStatus' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, incidentId, description, assigneeId, dueAt, status, createdAt, updatedAt]
+
+    ActionItemCreate:
+      type: object
+      required: [description, assigneeId, dueAt]
+      properties:
+        description: { type: string, minLength: 1, maxLength: 500 }
+        assigneeId: { type: string, format: uuid }
+        dueAt: { type: string, format: date-time }
+
+    ActionItemPatch:
+      type: object
+      description: >
+        Merge-patch; include only fields to change. A Responder may include only `status`.
+      properties:
+        status: { $ref: '#/components/schemas/ActionItemStatus' }
+        assigneeId: { type: string, format: uuid }
+        dueAt: { type: string, format: date-time }
+
+    ActionItemPage:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/ActionItem' }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/Role' }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required: [id, name, email, roles, active]
+
+    UserCreate:
+      type: object
+      required: [name, email, roles]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/Role' }
+
+    UserPatch:
+      type: object
+      properties:
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/Role' }
+        active: { type: boolean }
+
+    UserPage:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/User' }
+
+    AuditRecord:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        actorId: { type: string, format: uuid, nullable: true }
+        entityType: { type: string }
+        entityId: { type: string }
+        action: { $ref: '#/components/schemas/AuditAction' }
+        previousValue: { type: string, nullable: true }
+        newValue: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+      required: [id, entityType, entityId, action, createdAt]
+
+    AuditRecordPage:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/AuditRecord' }
+
+    Page:
+      type: object
+      description: Offset-pagination envelope.
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        totalItems: { type: integer }
+        totalPages: { type: integer }
+      required: [page, pageSize, totalItems, totalPages]
+
+    IncidentPage:
+      allOf:
+        - $ref: '#/components/schemas/Page'
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: '#/components/schemas/IncidentSummary' }
+
+    ProblemDetails:
+      type: object
+      description: RFC 9457 Problem Details.
+      properties:
+        type: { type: string, format: uri, default: 'about:blank' }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        traceId: { type: string }
+      required: [title, status]
+
+    ValidationProblemDetails:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  message: { type: string }
+                required: [field, message]
