@@ -25,19 +25,19 @@ use App\Domain\TimelineEvent\Model\TimelineEventType;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
-use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity]
 #[ORM\HasLifecycleCallbacks]
 class Incident extends AbstractModel
 {
+    private IncidentStatus $status;
+
     public function __construct(
         string $id,
         #[ORM\Column]
         private string $title,
         #[ORM\Column(type: 'text')]
         private string $description,
-        private IncidentStatus $status,
         #[ORM\Column(enumType: Severity::class)]
         private Severity $severity,
         #[ORM\Column]
@@ -56,6 +56,7 @@ class Incident extends AbstractModel
         private string $statusValue = '',
     ) {
         parent::__construct(new Id($id));
+        $this->status = new OpenStatus();
         $this->syncStatusValue();
     }
 
@@ -63,7 +64,7 @@ class Incident extends AbstractModel
         string $title,
         string $description,
         Severity $severity,
-        DateTimeImmutable $declaredAt
+        DateTimeImmutable $createdAt
     ): self {
         return new self(
             Uuid::v4()->toRfc4122(),
@@ -71,7 +72,7 @@ class Incident extends AbstractModel
             $description,
             new OpenStatus(),
             $severity,
-            $declaredAt
+            $createdAt
         );
     }
 
