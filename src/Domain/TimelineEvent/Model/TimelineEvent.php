@@ -21,7 +21,7 @@ class TimelineEvent extends AbstractModel
         #[ORM\Column(type: 'text')]
         private readonly string $message,
         #[ORM\Column]
-        private readonly DateTimeImmutable $occurredAt,
+        private readonly DateTimeImmutable $createdAt,
         #[ORM\Column]
         private readonly bool $raisedBySystem,
         #[ORM\ManyToOne(targetEntity: Incident::class, inversedBy: 'timelineEvents')]
@@ -62,9 +62,9 @@ class TimelineEvent extends AbstractModel
         return $this->message;
     }
 
-    public function getOccurredAt(): DateTimeImmutable
+    public function getCreatedAt(): DateTimeImmutable
     {
-        return $this->occurredAt;
+        return $this->createdAt;
     }
 
     public function isRaisedBySystem(): bool

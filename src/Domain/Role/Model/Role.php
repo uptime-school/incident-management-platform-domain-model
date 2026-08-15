@@ -14,9 +14,9 @@ class Role extends AbstractModel
     public function __construct(
         string $id,
         #[ORM\Column]
-        private readonly string $name,
+        private string $name,
         #[ORM\Column(type: 'text')]
-        private readonly string $description
+        private string $description
     ) {
         parent::__construct(new Id($id));
     }

@@ -14,9 +14,9 @@ class User extends AbstractModel
     public function __construct(
         string $id,
         #[ORM\Column]
-        private readonly string $name,
+        private string $name,
         #[ORM\Embedded(class: EmailAddress::class)]
-        private readonly EmailAddress $email
+        private EmailAddress $email
     ) {
         parent::__construct(new Id($id));
     }

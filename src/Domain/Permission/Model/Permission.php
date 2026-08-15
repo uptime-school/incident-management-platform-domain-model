@@ -14,9 +14,9 @@ class Permission extends AbstractModel
     public function __construct(
         string $id,
         #[ORM\Column]
-        private readonly string $code,
+        private string $code,
         #[ORM\Column(type: 'text')]
-        private readonly string $description
+        private string $description
     ) {
         parent::__construct(new Id($id));
     }

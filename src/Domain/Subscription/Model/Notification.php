@@ -17,7 +17,7 @@ class Notification extends AbstractModel
         #[ORM\Column(enumType: NotificationChannel::class)]
         private readonly NotificationChannel $channel,
         #[ORM\Column]
-        private readonly DateTimeImmutable $sentAt,
+        private readonly DateTimeImmutable $createdAt,
         #[ORM\Column(length: 36)]
         private readonly string $incidentId,
         #[ORM\Column(length: 36)]
@@ -31,9 +31,9 @@ class Notification extends AbstractModel
         return $this->channel;
     }
 
-    public function getSentAt(): DateTimeImmutable
+    public function getCreatedAt(): DateTimeImmutable
     {
-        return $this->sentAt;
+        return $this->createdAt;
     }
 
     public function getIncidentId(): string

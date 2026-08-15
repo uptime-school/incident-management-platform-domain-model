@@ -16,7 +16,7 @@ class IncidentParticipant extends AbstractModel
     public function __construct(
         string $id,
         #[ORM\Column(enumType: ParticipantRole::class)]
-        private readonly ParticipantRole $role,
+        private ParticipantRole $role,
         #[ORM\Column]
         private readonly DateTimeImmutable $assignedAt,
         #[ORM\Column(length: 36)]

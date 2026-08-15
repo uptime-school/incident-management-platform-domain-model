@@ -21,7 +21,7 @@ class AuditRecord extends AbstractModel
         #[ORM\Column(type: 'text')]
         private readonly string $newValue,
         #[ORM\Column]
-        private readonly DateTimeImmutable $recordedAt,
+        private readonly DateTimeImmutable $createdAt,
         #[ORM\Column(length: 36)]
         private readonly string $performedById,
         #[ORM\Column(length: 36)]
@@ -45,9 +45,9 @@ class AuditRecord extends AbstractModel
         return $this->newValue;
     }
 
-    public function getRecordedAt(): DateTimeImmutable
+    public function getCreatedAt(): DateTimeImmutable
     {
-        return $this->recordedAt;
+        return $this->createdAt;
     }
 
     public function getPerformedById(): string

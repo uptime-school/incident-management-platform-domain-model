@@ -25,38 +25,54 @@ use App\Domain\TimelineEvent\Model\TimelineEventType;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Uid\Uuid;
 
 #[ORM\Entity]
 #[ORM\HasLifecycleCallbacks]
 class Incident extends AbstractModel
 {
-    #[ORM\Column(name: 'status', type: 'string', length: 20)]
-    private string $statusValue;
-
     public function __construct(
         string $id,
         #[ORM\Column]
-        private readonly string $title,
+        private string $title,
         #[ORM\Column(type: 'text')]
-        private readonly string $description,
+        private string $description,
         private IncidentStatus $status,
         #[ORM\Column(enumType: Severity::class)]
-        private readonly Severity $severity,
+        private Severity $severity,
         #[ORM\Column]
-        private readonly DateTimeImmutable $declaredAt,
+        private readonly DateTimeImmutable $createdAt,
         #[ORM\Column(nullable: true)]
         private ?DateTimeImmutable $resolvedAt = null,
         #[ORM\OneToMany(targetEntity: IncidentParticipant::class, mappedBy: 'incident')]
-        private readonly Collection $participants = new ArrayCollection(),
+        private Collection $participants = new ArrayCollection(),
         #[ORM\OneToOne(targetEntity: PostmortemReport::class, mappedBy: 'incident')]
         private ?PostmortemReport $postmortemReport = null,
         #[ORM\OneToMany(targetEntity: TimelineEvent::class, mappedBy: 'incident')]
-        private readonly Collection $timelineEvents = new ArrayCollection(),
+        private Collection $timelineEvents = new ArrayCollection(),
         #[ORM\Column(length: 36, nullable: true)]
         private ?string $assignedTeamId = null,
+        #[ORM\Column(name: 'status', type: 'string', length: 20)]
+        private string $statusValue = '',
     ) {
         parent::__construct(new Id($id));
         $this->syncStatusValue();
+    }
+
+    public static function create(
+        string $title,
+        string $description,
+        Severity $severity,
+        DateTimeImmutable $declaredAt
+    ): self {
+        return new self(
+            Uuid::v4()->toRfc4122(),
+            $title,
+            $description,
+            new OpenStatus(),
+            $severity,
+            $declaredAt
+        );
     }
 
     public function investigate(?string $actorId = null): void
@@ -172,9 +188,9 @@ class Incident extends AbstractModel
         return $this->severity;
     }
 
-    public function getDeclaredAt(): DateTimeImmutable
+    public function getCreatedAt(): DateTimeImmutable
     {
-        return $this->declaredAt;
+        return $this->createdAt;
     }
 
     public function getResolvedAt(): ?DateTimeImmutable

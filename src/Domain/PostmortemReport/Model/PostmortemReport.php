@@ -17,9 +17,9 @@ class PostmortemReport extends AbstractModel
     public function __construct(
         string $id,
         #[ORM\Column(type: 'text')]
-        private readonly string $summary,
+        private string $summary,
         #[ORM\Column]
-        private readonly DateTimeImmutable $generatedAt,
+        private readonly DateTimeImmutable $createdAt,
         #[ORM\Column(length: 36)]
         private readonly string $fileId,
         #[ORM\OneToOne(targetEntity: Incident::class, inversedBy: 'postmortemReport')]
@@ -49,9 +49,9 @@ class PostmortemReport extends AbstractModel
         return $this->summary;
     }
 
-    public function getGeneratedAt(): DateTimeImmutable
+    public function getCreatedAt(): DateTimeImmutable
     {
-        return $this->generatedAt;
+        return $this->createdAt;
     }
 
     public function getFileId(): string

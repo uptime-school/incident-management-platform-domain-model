@@ -14,7 +14,7 @@ class Team extends AbstractModel
     public function __construct(
         string $id,
         #[ORM\Column]
-        private readonly string $name
+        private string $name
     ) {
         parent::__construct(new Id($id));
     }

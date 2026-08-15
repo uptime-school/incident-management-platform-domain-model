@@ -15,9 +15,9 @@ class Subscription extends AbstractModel
     public function __construct(
         string $id,
         #[ORM\Column(enumType: NotificationChannel::class)]
-        private readonly NotificationChannel $channel,
+        private NotificationChannel $channel,
         #[ORM\Column]
-        private readonly DateTimeImmutable $subscribedAt,
+        private readonly DateTimeImmutable $createdAt,
         #[ORM\Column(length: 36)]
         private readonly string $userId,
         #[ORM\Column(length: 36)]
@@ -31,9 +31,9 @@ class Subscription extends AbstractModel
         return $this->channel;
     }
 
-    public function getSubscribedAt(): DateTimeImmutable
+    public function getCreatedAt(): DateTimeImmutable
     {
-        return $this->subscribedAt;
+        return $this->createdAt;
     }
 
     public function getUserId(): string

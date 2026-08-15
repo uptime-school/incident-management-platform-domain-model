@@ -15,9 +15,9 @@ class Action extends AbstractModel
     public function __construct(
         string $id,
         #[ORM\Column(type: 'text')]
-        private readonly string $description,
+        private string $description,
         #[ORM\Column]
-        private readonly DateTimeImmutable $deadline,
+        private DateTimeImmutable $deadline,
         #[ORM\Column(enumType: ActionStatus::class)]
         private ActionStatus $status,
         #[ORM\Column(length: 36)]

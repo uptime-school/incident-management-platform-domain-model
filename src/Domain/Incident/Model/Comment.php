@@ -15,9 +15,9 @@ class Comment extends AbstractModel
     public function __construct(
         string $id,
         #[ORM\Column(type: 'text')]
-        private readonly string $text,
+        private string $text,
         #[ORM\Column]
-        private readonly DateTimeImmutable $writtenAt,
+        private readonly DateTimeImmutable $createdAt,
         #[ORM\Column(length: 36)]
         private readonly string $incidentId,
         #[ORM\Column(length: 36)]
@@ -31,9 +31,9 @@ class Comment extends AbstractModel
         return $this->text;
     }
 
-    public function getWrittenAt(): DateTimeImmutable
+    public function getCreatedAt(): DateTimeImmutable
     {
-        return $this->writtenAt;
+        return $this->createdAt;
     }
 
     public function getIncidentId(): string
